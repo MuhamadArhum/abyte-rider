@@ -67,55 +67,6 @@ const INITIAL_ALERTS: FleetAlert[] = [];
 let riders: Rider[] = [];
 let alerts: FleetAlert[] = [];
 
-// Background simulation ticker for simulated riders only
-setInterval(() => {
-  riders.forEach((rider) => {
-    if (!rider.isSimulated || rider.status === 'offline') return;
-
-    if (rider.status === 'idle') {
-      rider.speed = 0;
-      rider.lastPing = new Date().toISOString();
-      rider.stoppedDurationMinutes = (rider.stoppedDurationMinutes || 0) + 0.1;
-      return;
-    }
-
-    const speedVariation = (Math.random() - 0.5) * 6;
-    rider.speed = Math.max(15, Math.min(65, Math.round(rider.speed + speedVariation)));
-    if (!rider.maxSpeedToday || rider.speed > rider.maxSpeedToday) {
-      rider.maxSpeedToday = rider.speed;
-    }
-    rider.stoppedDurationMinutes = 0;
-    
-    rider.heading = (rider.heading + (Math.random() - 0.5) * 25 + 360) % 360;
-    
-    const rad = (rider.heading * Math.PI) / 180;
-    const distanceDelta = 0.00035 + Math.random() * 0.00025;
-    
-    const newLat = Number((rider.location.lat + Math.cos(rad) * distanceDelta).toFixed(6));
-    const newLng = Number((rider.location.lng + Math.sin(rad) * distanceDelta).toFixed(6));
-
-    rider.location.lat = newLat;
-    rider.location.lng = newLng;
-    rider.lastPing = new Date().toISOString();
-    rider.todayDistanceKm = Number((rider.todayDistanceKm + 0.04).toFixed(2));
-    
-    if (Math.random() < 0.05 && rider.batteryLevel > 5) {
-      rider.batteryLevel -= 1;
-    }
-
-    if (!rider.history) rider.history = [];
-    rider.history.push({
-      lat: newLat,
-      lng: newLng,
-      speed: rider.speed,
-      timestamp: rider.lastPing,
-      heading: rider.heading,
-      address: rider.location.address,
-    });
-    if (rider.history.length > 100) rider.history.shift();
-  });
-}, 3000);
-
 // Helper: Haversine distance in KM
 function getDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371;
