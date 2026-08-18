@@ -31,6 +31,7 @@ import {
 import { formatTimeAgo, formatBattery, getHeadingDirection } from '../utils/geo';
 import { soundManager } from '../utils/audio';
 import { getRiderHistoryLogsFromFirestore } from '../services/firebaseFleetService';
+import { getShareableRiderUrl } from '../utils/urlHelper';
 
 interface RiderDrawerProps {
   rider: Rider | null;
@@ -89,7 +90,7 @@ export const RiderDrawer: React.FC<RiderDrawerProps> = ({
   };
 
   const handleCopyTransmitterLink = () => {
-    const url = `${window.location.origin}/?rider=${rider.id}`;
+    const url = getShareableRiderUrl(rider.id);
     navigator.clipboard.writeText(url);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2000);

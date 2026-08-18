@@ -11,6 +11,7 @@ import {
   Trash2,
   AlertCircle
 } from 'lucide-react';
+import { getShareableRiderUrl } from '../utils/urlHelper';
 
 interface AddRiderModalProps {
   isOpen: boolean;
@@ -102,8 +103,7 @@ export const AddRiderModal: React.FC<AddRiderModalProps> = ({
   };
 
   const getRiderDirectUrl = (riderId: string) => {
-    const baseUrl = window.location.origin;
-    return `${baseUrl}/?rider=${riderId}`;
+    return getShareableRiderUrl(riderId);
   };
 
   const handleCopyLink = (url: string) => {

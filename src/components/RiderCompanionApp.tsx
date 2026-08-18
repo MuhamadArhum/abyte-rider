@@ -31,11 +31,11 @@ export const RiderCompanionApp: React.FC<RiderCompanionAppProps> = ({
   onCreateNewDeviceRider,
   initialRiderId,
 }) => {
-  const [selectedRiderId, setSelectedRiderId] = useState<string>(initialRiderId || riders[0]?.id || 'RDR-001');
+  const [selectedRiderId, setSelectedRiderId] = useState<string>(initialRiderId || riders[0]?.id || '');
   const [isTransmitting, setIsTransmitting] = useState<boolean>(true);
-  const [gpsMode, setGpsMode] = useState<'real' | 'simulated'>('simulated');
+  const [gpsMode, setGpsMode] = useState<'real' | 'simulated'>('real');
   const [speedSlider, setSpeedSlider] = useState<number>(34);
-  const [shiftDurationSeconds, setShiftDurationSeconds] = useState<number>(1420);
+  const [shiftDurationSeconds, setShiftDurationSeconds] = useState<number>(0);
   const [sosTriggered, setSosTriggered] = useState<boolean>(false);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
   const [wakeLockActive, setWakeLockActive] = useState<boolean>(false);
@@ -48,6 +48,8 @@ export const RiderCompanionApp: React.FC<RiderCompanionAppProps> = ({
   useEffect(() => {
     if (initialRiderId && riders.some(r => r.id === initialRiderId)) {
       setSelectedRiderId(initialRiderId);
+      setGpsMode('real');
+      setIsTransmitting(true);
     }
   }, [initialRiderId, riders]);
 
