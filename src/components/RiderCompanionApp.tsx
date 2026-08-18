@@ -12,7 +12,10 @@ import {
   Smartphone,
   Battery,
   ShieldCheck,
-  UserPlus
+  UserPlus,
+  ArrowLeft,
+  Share2,
+  RefreshCw
 } from 'lucide-react';
 import { soundManager } from '../utils/audio';
 
@@ -30,6 +33,7 @@ interface RiderCompanionAppProps {
   onStatusUpdate: (riderId: string, status: Rider['status'], reason?: string) => void;
   onCreateNewDeviceRider: (name: string, phone: string, vehicleType: Rider['vehicleType']) => Promise<Rider | null>;
   initialRiderId?: string;
+  onSwitchToAdmin?: () => void;
 }
 
 export const RiderCompanionApp: React.FC<RiderCompanionAppProps> = ({
@@ -38,8 +42,14 @@ export const RiderCompanionApp: React.FC<RiderCompanionAppProps> = ({
   onStatusUpdate,
   onCreateNewDeviceRider,
   initialRiderId,
+  onSwitchToAdmin,
 }) => {
-  const [selectedRiderId, setSelectedRiderId] = useState<string>(initialRiderId || riders[0]?.id || '');
+  const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
+  const urlRiderParam = urlParams.get('rider') || initialRiderId || '';
+  const urlNameParam = urlParams.get('name') || '';
+  const urlPlateParam = urlParams.get('plate') || '';
+
+  const [selectedRiderId, setSelectedRiderId] = useState<string>(urlRiderParam || (riders[0]?.id) || 'RDR-001');
   const [isTransmitting, setIsTransmitting] = useState<boolean>(true);
   const [gpsPermissionState, setGpsPermissionState] = useState<'prompt' | 'granted' | 'denied'>('prompt');
   const [currentGpsCoords, setCurrentGpsCoords] = useState<{ lat: number; lng: number; speed: number; heading: number; accuracy: number } | null>(null);
@@ -49,25 +59,18 @@ export const RiderCompanionApp: React.FC<RiderCompanionAppProps> = ({
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
   const [wakeLockActive, setWakeLockActive] = useState<boolean>(false);
   const [lastPingTime, setLastPingTime] = useState<string>('');
+  const [gpsWatchError, setGpsWatchError] = useState<string | null>(null);
 
-  // Quick Self Register State if no riders exist
-  const [newName, setNewName] = useState('');
-  const [newPhone, setNewPhone] = useState('+92 300 ');
-  const [newPlate, setNewPlate] = useState('KHI-');
-  const [isCreatingSelf, setIsCreatingSelf] = useState(false);
-
-  const activeRider = riders.find((r) => r.id === selectedRiderId) || riders[0];
   const watchIdRef = useRef<number | null>(null);
 
-  // Sync initialRiderId from URL
+  // Sync rider ID
   useEffect(() => {
-    if (initialRiderId && riders.some(r => r.id === initialRiderId)) {
-      setSelectedRiderId(initialRiderId);
-      setIsTransmitting(true);
+    if (urlRiderParam) {
+      setSelectedRiderId(urlRiderParam);
     } else if (riders.length > 0 && !selectedRiderId) {
       setSelectedRiderId(riders[0].id);
     }
-  }, [initialRiderId, riders, selectedRiderId]);
+  }, [urlRiderParam, riders, selectedRiderId]);
 
   // Read real device battery level if API is available
   useEffect(() => {
@@ -81,7 +84,7 @@ export const RiderCompanionApp: React.FC<RiderCompanionAppProps> = ({
     }
   }, []);
 
-  // Request WakeLock to keep screen on during active shift
+  // Request WakeLock to keep phone screen awake during delivery shift
   useEffect(() => {
     let wakeLockSentinel: any = null;
 
@@ -91,7 +94,7 @@ export const RiderCompanionApp: React.FC<RiderCompanionAppProps> = ({
           wakeLockSentinel = await (navigator as any).wakeLock.request('screen');
           setWakeLockActive(true);
         } catch (err) {
-          console.warn('Wake Lock request failed:', err);
+          console.warn('Wake Lock error:', err);
         }
       }
     };
@@ -121,9 +124,10 @@ export const RiderCompanionApp: React.FC<RiderCompanionAppProps> = ({
     return () => clearInterval(timer);
   }, [isTransmitting]);
 
-  // Handle Admin Remote Nudge / Buzzer
+  // Handle Admin Remote Nudge / Alert Buzzer
+  const foundRider = riders.find((r) => r.id === selectedRiderId);
   useEffect(() => {
-    if (activeRider?.nudged) {
+    if (foundRider?.nudged) {
       if (soundEnabled) {
         soundManager.playNudgeBuzzer();
       }
@@ -131,11 +135,39 @@ export const RiderCompanionApp: React.FC<RiderCompanionAppProps> = ({
         navigator.vibrate([200, 100, 200, 100, 400]);
       }
     }
-  }, [activeRider?.nudged, soundEnabled]);
+  }, [foundRider?.nudged, soundEnabled]);
+
+  // Construct guaranteed active rider object (Never crashes or blanks on mobile)
+  const activeRider: Rider = foundRider || {
+    id: selectedRiderId || urlRiderParam || 'RDR-001',
+    name: urlNameParam || (selectedRiderId ? `Rider ${selectedRiderId}` : 'Active Rider'),
+    phone: '',
+    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+    vehicleType: 'bike',
+    vehiclePlate: urlPlateParam || 'GPS-LIVE',
+    status: 'online',
+    location: {
+      lat: 24.8607,
+      lng: 67.0011,
+      address: 'Live Location Pin',
+    },
+    heading: 0,
+    speed: 0,
+    batteryLevel: deviceBattery,
+    accuracy: 3,
+    lastPing: new Date().toISOString(),
+    todayDistanceKm: 0,
+    maxSpeedToday: 0,
+    stoppedDurationMinutes: 0,
+    rating: 5.0,
+    city: 'Karachi',
+    isSimulated: false,
+    history: [],
+  };
 
   // Pure Real Hardware GPS Geolocation Watcher
   useEffect(() => {
-    if (!isTransmitting || !activeRider) {
+    if (!isTransmitting) {
       if (watchIdRef.current !== null) {
         navigator.geolocation.clearWatch(watchIdRef.current);
         watchIdRef.current = null;
@@ -145,6 +177,7 @@ export const RiderCompanionApp: React.FC<RiderCompanionAppProps> = ({
 
     if (!('geolocation' in navigator)) {
       setGpsPermissionState('denied');
+      setGpsWatchError('Your mobile browser does not support GPS Geolocation.');
       return;
     }
 
@@ -152,6 +185,7 @@ export const RiderCompanionApp: React.FC<RiderCompanionAppProps> = ({
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
         setGpsPermissionState('granted');
+        setGpsWatchError(null);
         const speedKmh = pos.coords.speed !== null && pos.coords.speed >= 0 
           ? Math.round(pos.coords.speed * 3.6) 
           : (currentGpsCoords ? currentGpsCoords.speed : 0);
@@ -188,6 +222,9 @@ export const RiderCompanionApp: React.FC<RiderCompanionAppProps> = ({
         console.warn('Real GPS Error:', err);
         if (err.code === 1) {
           setGpsPermissionState('denied');
+          setGpsWatchError('Location permission denied. Please allow location in browser.');
+        } else {
+          setGpsWatchError(err.message || 'Searching for GPS satellite signal...');
         }
       },
       {
@@ -203,7 +240,7 @@ export const RiderCompanionApp: React.FC<RiderCompanionAppProps> = ({
         watchIdRef.current = null;
       }
     };
-  }, [isTransmitting, activeRider?.id, deviceBattery]);
+  }, [isTransmitting, activeRider.id, deviceBattery]);
 
   const handleToggleTransmitter = () => {
     const nextState = !isTransmitting;
@@ -221,18 +258,6 @@ export const RiderCompanionApp: React.FC<RiderCompanionAppProps> = ({
     }
   };
 
-  const handleSelfRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newName.trim()) return;
-    setIsCreatingSelf(true);
-    const created = await onCreateNewDeviceRider(newName, newPhone, 'bike');
-    setIsCreatingSelf(false);
-    if (created) {
-      setSelectedRiderId(created.id);
-      setIsTransmitting(true);
-    }
-  };
-
   const formatSeconds = (sec: number) => {
     const hrs = Math.floor(sec / 3600);
     const mins = Math.floor((sec % 3600) / 60);
@@ -240,74 +265,13 @@ export const RiderCompanionApp: React.FC<RiderCompanionAppProps> = ({
     return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  // If fleet has no riders at all, show instant connection card
-  if (!activeRider) {
-    return (
-      <div className="w-full max-w-md bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-xl p-6 text-slate-900 my-auto">
-        <div className="text-center space-y-2 mb-6">
-          <div className="w-14 h-14 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto shadow-inner">
-            <Smartphone className="w-7 h-7" />
-          </div>
-          <h2 className="text-base font-extrabold text-slate-900">Connect Rider Phone (Real GPS)</h2>
-          <p className="text-xs text-slate-500 max-w-xs mx-auto">
-            Database me abhi koi rider registered nahi hai. Apna naam enter karein aur live GPS tracking shuru karein:
-          </p>
-        </div>
-
-        <form onSubmit={handleSelfRegister} className="space-y-3.5">
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">Rider Name *</label>
-            <input
-              type="text"
-              required
-              placeholder="e.g. Asad Ullah"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-emerald-500 transition"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">Phone Number *</label>
-            <input
-              type="text"
-              required
-              value={newPhone}
-              onChange={(e) => setNewPhone(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-mono text-slate-900 focus:outline-none focus:border-emerald-500 transition"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">Bike Number</label>
-            <input
-              type="text"
-              value={newPlate}
-              onChange={(e) => setNewPlate(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-mono text-slate-900 focus:outline-none focus:border-emerald-500 transition"
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={isCreatingSelf}
-            className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-xs transition"
-          >
-            <UserPlus className="w-4 h-4" />
-            <span>{isCreatingSelf ? 'Connecting...' : 'Connect Phone & Start Real GPS'}</span>
-          </button>
-        </form>
-      </div>
-    );
-  }
-
   return (
     <div className="w-full max-w-md bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-xl flex flex-col my-auto select-none text-slate-900">
       {/* Mobile Device Status Bar */}
       <div className="bg-slate-50 px-5 py-3 border-b border-slate-200 flex items-center justify-between text-xs">
         <div className="flex items-center gap-2">
           <Radio className="w-4 h-4 text-emerald-600 animate-pulse" />
-          <span className="font-extrabold text-slate-900 tracking-wide">REAL HARDWARE GPS TRANSMITTER</span>
+          <span className="font-extrabold text-slate-900 tracking-wide">REAL 24/7 GPS TRANSMITTER</span>
         </div>
         <div className="flex items-center gap-3 text-slate-500 font-mono text-[11px]">
           <span>{formatSeconds(shiftDurationSeconds)}</span>
@@ -326,11 +290,13 @@ export const RiderCompanionApp: React.FC<RiderCompanionAppProps> = ({
           </div>
           <div>
             <h2 className="text-sm font-extrabold text-slate-900 leading-tight">{activeRider.name}</h2>
-            <p className="text-xs text-slate-500 font-mono">{activeRider.vehiclePlate || 'GPS Active'}</p>
+            <p className="text-xs text-slate-500 font-mono">
+              ID: {activeRider.id} • {activeRider.vehiclePlate || 'GPS Active'}
+            </p>
           </div>
         </div>
 
-        {/* Change Active Rider Selector */}
+        {/* Change Active Rider Selector if multiple */}
         {riders.length > 1 && (
           <select
             value={selectedRiderId}
@@ -350,7 +316,7 @@ export const RiderCompanionApp: React.FC<RiderCompanionAppProps> = ({
       <div className="p-5 space-y-4">
         {/* GPS Permission Warning if Denied */}
         {gpsPermissionState === 'denied' && (
-          <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-xs text-rose-800 space-y-1.5">
+          <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-xs text-rose-800 space-y-1.5 animate-in fade-in">
             <div className="flex items-center gap-2 font-bold">
               <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
               <span>Location Permission Required</span>
@@ -424,10 +390,10 @@ export const RiderCompanionApp: React.FC<RiderCompanionAppProps> = ({
         <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-1.5">
           <div className="flex items-center justify-between text-xs">
             <span className="font-bold text-slate-800 flex items-center gap-1.5">
-              <MapPin className="w-3.5 h-3.5 text-emerald-600" /> Live Hardware Pin
+              <MapPin className="w-3.5 h-3.5 text-emerald-600" /> Live Hardware Coordinates
             </span>
             <span className="text-[10px] font-mono text-slate-500">
-              {lastPingTime ? `Last Ping: ${lastPingTime}` : 'Connecting GPS...'}
+              {lastPingTime ? `Ping: ${lastPingTime}` : 'Acquiring Satellites...'}
             </span>
           </div>
           <div className="bg-white border border-slate-200 rounded-xl p-2.5 flex items-center justify-between font-mono text-xs text-slate-700">
@@ -437,7 +403,7 @@ export const RiderCompanionApp: React.FC<RiderCompanionAppProps> = ({
                 : `${activeRider.location.lat.toFixed(6)}, ${activeRider.location.lng.toFixed(6)}`}
             </span>
             <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md">
-              Real GPS
+              Live Hardware
             </span>
           </div>
         </div>
@@ -458,6 +424,18 @@ export const RiderCompanionApp: React.FC<RiderCompanionAppProps> = ({
             </button>
           )}
         </div>
+
+        {/* Switch to Admin Map Link */}
+        {onSwitchToAdmin && (
+          <div className="text-center pt-1">
+            <button
+              onClick={onSwitchToAdmin}
+              className="text-xs text-slate-500 hover:text-emerald-700 underline font-medium"
+            >
+              ← Open Admin Fleet Map
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

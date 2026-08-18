@@ -45,7 +45,13 @@ export default function App() {
     // 1. Subscribe to Live Riders in Firestore
     const unsubscribeRiders = subscribeToFleetRiders((firestoreRiders) => {
       setRiders(firestoreRiders);
-      if (firestoreRiders.length > 0) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlRider = urlParams.get('rider');
+
+      if (urlRider) {
+        setSelectedRiderId(urlRider);
+        setCurrentView('rider');
+      } else if (firestoreRiders.length > 0) {
         setSelectedRiderId((prev) => (prev && firestoreRiders.some(r => r.id === prev) ? prev : firestoreRiders[0].id));
       } else {
         setSelectedRiderId(null);
@@ -300,6 +306,7 @@ export default function App() {
                 )
               }
               initialRiderId={selectedRiderId || undefined}
+              onSwitchToAdmin={() => setCurrentView('admin')}
             />
           </main>
         )}

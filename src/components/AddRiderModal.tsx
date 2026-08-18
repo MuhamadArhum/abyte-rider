@@ -6,12 +6,15 @@ import {
   Smartphone, 
   Copy, 
   Check, 
-  MessageCircle,
-  FileSpreadsheet,
-  Trash2,
-  AlertCircle
+  MessageCircle, 
+  FileSpreadsheet, 
+  Trash2, 
+  QrCode, 
+  ExternalLink,
+  Info,
+  Share2
 } from 'lucide-react';
-import { getShareableRiderUrl } from '../utils/urlHelper';
+import { getDirectRiderUrl, getPublicRiderUrl, getQrCodeUrl } from '../utils/urlHelper';
 
 interface AddRiderModalProps {
   isOpen: boolean;
@@ -45,7 +48,9 @@ export const AddRiderModal: React.FC<AddRiderModalProps> = ({
   const [vehiclePlate, setVehiclePlate] = useState('KHI-');
   const [city, setCity] = useState('Karachi');
   const [createdRider, setCreatedRider] = useState<Rider | null>(null);
-  const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedLinkType, setCopiedLinkType] = useState<string | null>(null);
+  const [selectedUrlType, setSelectedUrlType] = useState<'direct' | 'public'>('direct');
+  const [showQrCode, setShowQrCode] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Bulk Import State
@@ -102,20 +107,20 @@ export const AddRiderModal: React.FC<AddRiderModalProps> = ({
     }
   };
 
-  const getRiderDirectUrl = (riderId: string) => {
-    return getShareableRiderUrl(riderId);
-  };
+  const currentActiveUrl = createdRider 
+    ? (selectedUrlType === 'direct' ? getDirectRiderUrl(createdRider.id) : getPublicRiderUrl(createdRider.id))
+    : '';
 
-  const handleCopyLink = (url: string) => {
+  const handleCopyLink = (url: string, type: string) => {
     navigator.clipboard.writeText(url);
-    setCopiedLink(true);
-    setTimeout(() => setCopiedLink(false), 2000);
+    setCopiedLinkType(type);
+    setTimeout(() => setCopiedLinkType(null), 2000);
   };
 
   const handleWhatsAppShare = (rider: Rider) => {
-    const url = getRiderDirectUrl(rider.id);
+    const url = currentActiveUrl;
     const message = encodeURIComponent(
-      `Assalam-o-Alaikum ${rider.name},\n\nAapki 24/7 Live GPS tracking link active hai. Shift shuru krty waqt is link ko mobile main open krein aur "START GPS" tap krein:\n${url}`
+      `Assalam-o-Alaikum ${rider.name},\n\nAapki 24/7 Live GPS tracking link active hai. Shift shuru krty waqt is link ko mobile main open krein aur "Allow Location" karein:\n${url}`
     );
     window.open(`https://api.whatsapp.com/send?phone=${rider.phone.replace(/[^0-9]/g, '')}&text=${message}`, '_blank');
   };
@@ -126,6 +131,7 @@ export const AddRiderModal: React.FC<AddRiderModalProps> = ({
     setPhone('+92 300 ');
     setVehiclePlate('KHI-');
     setBulkSuccessCount(null);
+    setShowQrCode(false);
     onClose();
   };
 
@@ -136,10 +142,10 @@ export const AddRiderModal: React.FC<AddRiderModalProps> = ({
         <div className="px-5 py-3.5 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
           <div>
             <h3 className="font-extrabold text-sm text-slate-900">
-              {createdRider ? 'Rider GPS Link Ready' : 'Manage & Add Real Riders'}
+              {createdRider ? 'Rider GPS Tracking Link & QR' : 'Manage & Add Real Riders'}
             </h3>
             <p className="text-xs text-slate-500">
-              {createdRider ? 'Send tracking link to rider phone' : 'Input your actual fleet information'}
+              {createdRider ? 'Share link or scan QR code on rider phone' : 'Input your actual fleet information'}
             </p>
           </div>
           <button
@@ -190,54 +196,134 @@ export const AddRiderModal: React.FC<AddRiderModalProps> = ({
         <div className="p-5">
           {createdRider ? (
             <div className="space-y-4">
-              <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold shrink-0">
-                  <Check className="w-5 h-5" />
+              {/* Success Badge */}
+              <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold shrink-0">
+                    <Check className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-xs text-slate-900">{createdRider.name} Registered!</h4>
+                    <p className="text-[11px] text-emerald-800">
+                      ID: <span className="font-mono font-bold">{createdRider.id}</span> • Bike: <b>{createdRider.vehiclePlate}</b>
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h4 className="font-extrabold text-sm">{createdRider.name} Added!</h4>
-                  <p className="text-xs text-emerald-800">
-                    Phone: <b>{createdRider.phone}</b> • Bike: <b>{createdRider.vehiclePlate}</b>
-                  </p>
-                </div>
+
+                <button
+                  onClick={() => setShowQrCode(!showQrCode)}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition ${
+                    showQrCode ? 'bg-emerald-600 text-white' : 'bg-white border border-emerald-300 text-emerald-800'
+                  }`}
+                >
+                  <QrCode className="w-3.5 h-3.5" />
+                  <span>{showQrCode ? 'Hide QR' : 'Scan QR'}</span>
+                </button>
               </div>
 
-              {/* Direct Link Box */}
+              {/* QR Code Scanner View */}
+              {showQrCode && (
+                <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col items-center justify-center text-center space-y-2 animate-in fade-in">
+                  <p className="text-xs font-bold text-slate-800">Scan with Rider's Mobile Camera:</p>
+                  <div className="p-2 bg-white rounded-xl shadow-xs border border-slate-200">
+                    <img
+                      src={getQrCodeUrl(currentActiveUrl)}
+                      alt="Rider Tracking QR Code"
+                      className="w-44 h-44 object-contain rounded-lg"
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-500 max-w-xs">
+                    Rider apne camera se scan karega to direct transmitter page khul jayega.
+                  </p>
+                </div>
+              )}
+
+              {/* URL Type Switcher */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700">Rider Mobile Transmitter URL</label>
+                <div className="flex items-center justify-between text-xs">
+                  <label className="font-bold text-slate-700">Choose Link Type:</label>
+                  <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+                    <button
+                      onClick={() => setSelectedUrlType('direct')}
+                      className={`px-2.5 py-1 rounded-md font-bold text-[11px] transition ${
+                        selectedUrlType === 'direct'
+                          ? 'bg-white text-emerald-700 shadow-xs'
+                          : 'text-slate-500'
+                      }`}
+                    >
+                      Direct Link (Default)
+                    </button>
+                    <button
+                      onClick={() => setSelectedUrlType('public')}
+                      className={`px-2.5 py-1 rounded-md font-bold text-[11px] transition ${
+                        selectedUrlType === 'public'
+                          ? 'bg-white text-emerald-700 shadow-xs'
+                          : 'text-slate-500'
+                      }`}
+                    >
+                      Public Share (ais-pre)
+                    </button>
+                  </div>
+                </div>
+
                 <div className="flex items-center gap-2">
                   <input
                     type="text"
                     readOnly
-                    value={getRiderDirectUrl(createdRider.id)}
+                    value={currentActiveUrl}
                     className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono text-slate-700 select-all"
                   />
                   <button
-                    onClick={() => handleCopyLink(getRiderDirectUrl(createdRider.id))}
+                    onClick={() => handleCopyLink(currentActiveUrl, 'main')}
                     className="px-3 py-2 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-800 rounded-xl text-xs font-bold flex items-center gap-1.5 transition"
                   >
-                    {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copiedLink ? 'Copied' : 'Copy'}</span>
+                    {copiedLinkType === 'main' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedLinkType === 'main' ? 'Copied' : 'Copy'}</span>
                   </button>
                 </div>
               </div>
 
-              {/* WhatsApp Share Button */}
-              <button
-                onClick={() => handleWhatsAppShare(createdRider)}
-                className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition"
-              >
-                <MessageCircle className="w-4 h-4" />
-                <span>Send GPS Link to Rider's WhatsApp</span>
-              </button>
+              {/* Guidance Note */}
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-[11px] text-blue-900 flex items-start gap-2">
+                <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                <div>
+                  <b>Agar Link par 404 ya 403 error aaye:</b>
+                  <ul className="list-disc pl-4 mt-1 space-y-0.5 text-blue-800">
+                    <li>Top-Right me <b>"Share"</b> button daba kar public publish karein, ya</li>
+                    <li>Rider ko <b>Direct Link</b> bhej kar usi browser me open karne ko bolein, ya</li>
+                    <li>Upar <b>"Scan QR"</b> button daba kar mobile camera se scan karein.</li>
+                  </ul>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleWhatsAppShare(createdRider)}
+                  className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  <span>WhatsApp Link</span>
+                </button>
+
+                <button
+                  onClick={() => window.open(currentActiveUrl, '_blank')}
+                  className="px-3.5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1.5 transition"
+                  title="Open in new tab to test"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Test Now</span>
+                </button>
+              </div>
 
               <button
                 onClick={() => {
                   setCreatedRider(null);
                   setName('');
                   setPhone('+92 300 ');
+                  setShowQrCode(false);
                 }}
-                className="w-full py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 font-bold text-xs transition"
+                className="w-full py-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 font-bold text-xs transition"
               >
                 + Add Another Rider
               </button>
