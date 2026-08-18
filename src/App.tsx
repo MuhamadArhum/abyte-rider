@@ -15,7 +15,7 @@ import {
   addRiderToFirestore, 
   deleteRiderFromFirestore, 
   clearAllRidersFromFirestore,
-  seedInitialFleetIfEmpty
+  cleanupDemoDataFromFirestore
 } from './services/firebaseFleetService';
 
 export default function App() {
@@ -37,21 +37,19 @@ export default function App() {
     }
   }, []);
 
-  // Real-time Firestore synchronization
+  // Real-time Firestore synchronization & automatic legacy demo data purge
   useEffect(() => {
-    // Seed initial fleet into Firestore if completely empty
-    seedInitialFleetIfEmpty();
+    // Purge any legacy simulated demo riders so Firestore holds only real data
+    cleanupDemoDataFromFirestore();
 
     // 1. Subscribe to Live Riders in Firestore
     const unsubscribeRiders = subscribeToFleetRiders((firestoreRiders) => {
+      setRiders(firestoreRiders);
       if (firestoreRiders.length > 0) {
-        setRiders(firestoreRiders);
-        if (!selectedRiderId) {
-          setSelectedRiderId(firestoreRiders[0].id);
-        }
+        setSelectedRiderId((prev) => (prev && firestoreRiders.some(r => r.id === prev) ? prev : firestoreRiders[0].id));
       } else {
-        // Fallback to local server fetch if Firestore is initializing
-        fetchLocalFleetData();
+        setSelectedRiderId(null);
+        setReplayRiderId(null);
       }
     });
 
@@ -65,22 +63,6 @@ export default function App() {
       unsubscribeAlerts();
     };
   }, []);
-
-  // Local fetch fallback
-  const fetchLocalFleetData = async () => {
-    try {
-      const res = await fetch('/api/riders');
-      if (res.ok) {
-        const data = await res.json();
-        if (data.riders && data.riders.length > 0) {
-          setRiders(data.riders);
-          if (!selectedRiderId) setSelectedRiderId(data.riders[0].id);
-        }
-      }
-    } catch (err) {
-      console.warn('Backend sync:', err);
-    }
-  };
 
   // Update Rider Location (Transmitter -> Firestore & Local Node)
   const handleLocationUpdate = async (
@@ -144,7 +126,7 @@ export default function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...riderData, id: newRider.id }),
-      });
+      }).catch(() => {});
 
       setSelectedRiderId(newRider.id);
       return newRider;
@@ -167,14 +149,16 @@ export default function App() {
     return false;
   };
 
-  // Delete a Rider
+  // Delete a Rider permanently
   const handleDeleteRider = async (riderId: string) => {
     try {
+      // Optimistic UI update
+      setRiders((prev) => prev.filter((r) => r.id !== riderId));
+      if (selectedRiderId === riderId) setSelectedRiderId(null);
+      if (replayRiderId === riderId) setReplayRiderId(null);
+
       await deleteRiderFromFirestore(riderId);
-      await fetch(`/api/riders/${riderId}`, { method: 'DELETE' });
-      if (selectedRiderId === riderId) {
-        setSelectedRiderId(null);
-      }
+      await fetch(`/api/riders/${riderId}`, { method: 'DELETE' }).catch(() => {});
     } catch (err) {
       console.error('Error deleting rider:', err);
     }
@@ -183,11 +167,14 @@ export default function App() {
   // Clear All Riders (Clean Start)
   const handleClearAllRiders = async () => {
     try {
-      await clearAllRidersFromFirestore();
-      await fetch('/api/riders-clear-all', { method: 'DELETE' });
+      // Optimistic UI update
+      setRiders([]);
       setSelectedRiderId(null);
       setReplayRiderId(null);
-      setRiders([]);
+      setAlerts([]);
+
+      await clearAllRidersFromFirestore();
+      await fetch('/api/riders-clear-all', { method: 'DELETE' }).catch(() => {});
     } catch (err) {
       console.error('Error clearing fleet:', err);
     }
@@ -211,17 +198,6 @@ export default function App() {
     }
   };
 
-  // Reset Fleet to Demo
-  const handleResetFleet = async () => {
-    try {
-      await fetch('/api/reset-fleet', { method: 'POST' });
-      seedInitialFleetIfEmpty();
-      soundManager.playRadarPing();
-    } catch (err) {
-      console.error('Error resetting fleet:', err);
-    }
-  };
-
   const selectedRider = riders.find((r) => r.id === selectedRiderId) || null;
   const activeEmergencies = alerts.filter((a) => a.type === 'sos' && !a.resolved).length;
   const activeMovingCount = riders.filter((r) => r.speed > 2 || r.status === 'moving').length;
@@ -233,7 +209,6 @@ export default function App() {
         currentView={currentView}
         onViewChange={(view) => setCurrentView(view)}
         onOpenAddRiderModal={() => setIsAddRiderModalOpen(true)}
-        onResetFleet={handleResetFleet}
         soundEnabled={soundEnabled}
         onToggleSound={() => setSoundEnabled(!soundEnabled)}
         activeEmergencyCount={activeEmergencies}
@@ -263,6 +238,8 @@ export default function App() {
                 setSelectedRiderId(id);
                 setIsAddRiderModalOpen(true);
               }}
+              onDeleteRider={handleDeleteRider}
+              onClearAllRiders={handleClearAllRiders}
             />
 
             {/* Center: Clean Light Leaflet Map */}
@@ -275,7 +252,6 @@ export default function App() {
                     setSelectedRiderId(id);
                   }}
                   activeFilter="all"
-                  onResetFleet={handleResetFleet}
                   replayRiderId={replayRiderId}
                   onCloseReplay={() => setReplayRiderId(null)}
                 />

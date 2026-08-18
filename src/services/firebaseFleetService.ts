@@ -351,121 +351,65 @@ export async function deleteRiderFromFirestore(riderId: string) {
   try {
     const riderRef = doc(db, 'riders', riderId);
     await deleteDoc(riderRef);
+
+    // Also delete any alerts related to this rider
+    const alertsCol = collection(db, 'alerts');
+    const q = query(alertsCol, where('riderId', '==', riderId));
+    const alertsSnap = await getDocs(q);
+    const deleteAlerts = alertsSnap.docs.map((d) => deleteDoc(doc(db, 'alerts', d.id)));
+    await Promise.all(deleteAlerts);
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);
   }
 }
 
-// Clear all riders from Firestore
+// Clear all riders and alerts from Firestore (100% clean fleet)
 export async function clearAllRidersFromFirestore() {
   const path = 'riders';
   try {
+    // 1. Delete all riders
     const snapshot = await getDocs(collection(db, 'riders'));
     const deletePromises = snapshot.docs.map((docSnap) => deleteDoc(doc(db, 'riders', docSnap.id)));
     await Promise.all(deletePromises);
+
+    // 2. Delete all alerts
+    const alertsSnap = await getDocs(collection(db, 'alerts'));
+    const deleteAlertPromises = alertsSnap.docs.map((d) => deleteDoc(doc(db, 'alerts', d.id)));
+    await Promise.all(deleteAlertPromises);
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);
   }
 }
 
-// Seed Initial Pakistani Demo Fleet into Firestore if totally empty
-export async function seedInitialFleetIfEmpty() {
+// Purge any legacy simulated demo riders from Firestore
+export async function cleanupDemoDataFromFirestore() {
   try {
     const ridersCol = collection(db, 'riders');
-    const snapshot = await getDocs(query(ridersCol, limit(1)));
-    if (!snapshot.empty) return; // Already has data
+    const snap = await getDocs(ridersCol);
+    const demoDeletes: Promise<void>[] = [];
 
-    const sampleRiders: any[] = [
-      {
-        id: 'RDR-001',
-        name: 'Muhammad Tariq',
-        phone: '+92 301 2345678',
-        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-        vehicleType: 'bike',
-        vehiclePlate: 'KHI-7890 (Honda 125)',
-        status: 'moving',
-        lat: 24.8607,
-        lng: 67.0011,
-        address: 'Saddar Market Zone B',
-        heading: 45,
-        speed: 38,
-        batteryLevel: 86,
-        accuracy: 3,
-        lastPing: new Date().toISOString(),
-        todayDistanceKm: 42.8,
-        maxSpeedToday: 58,
-        stoppedDurationMinutes: 0,
-        rating: 4.9,
-        city: 'Karachi',
-        isSimulated: true,
-        recentHistory: [
-          { lat: 24.8480, lng: 66.9910, speed: 28, timestamp: new Date(Date.now() - 35 * 60000).toISOString(), heading: 25, address: 'Tower' },
-          { lat: 24.8520, lng: 66.9950, speed: 32, timestamp: new Date(Date.now() - 25 * 60000).toISOString(), heading: 30, address: 'I.I Chundrigar' },
-          { lat: 24.8560, lng: 66.9980, speed: 36, timestamp: new Date(Date.now() - 15 * 60000).toISOString(), heading: 40, address: 'MA Jinnah' },
-          { lat: 24.8607, lng: 67.0011, speed: 38, timestamp: new Date().toISOString(), heading: 45, address: 'Saddar Market' },
-        ],
-      },
-      {
-        id: 'RDR-002',
-        name: 'Ali Raza Khan',
-        phone: '+92 312 9876543',
-        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-        vehicleType: 'bike',
-        vehiclePlate: 'KHI-4321 (Yamaha YBR)',
-        status: 'moving',
-        lat: 24.8715,
-        lng: 67.0599,
-        address: 'PECHS Block 2 Main Blvd',
-        heading: 120,
-        speed: 26,
-        batteryLevel: 68,
-        accuracy: 4,
-        lastPing: new Date().toISOString(),
-        todayDistanceKm: 55.4,
-        maxSpeedToday: 62,
-        stoppedDurationMinutes: 0,
-        rating: 4.8,
-        city: 'Karachi',
-        isSimulated: true,
-        recentHistory: [
-          { lat: 24.8620, lng: 67.0420, speed: 30, timestamp: new Date(Date.now() - 20 * 60000).toISOString(), heading: 105, address: 'Shahrah-e-Faisal' },
-          { lat: 24.8715, lng: 67.0599, speed: 26, timestamp: new Date().toISOString(), heading: 120, address: 'PECHS Block 2' },
-        ],
-      },
-      {
-        id: 'RDR-003',
-        name: 'Kamran Haider',
-        phone: '+92 333 4455667',
-        avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
-        vehicleType: 'car',
-        vehiclePlate: 'KHI-9988 (Suzuki Alto)',
-        status: 'moving',
-        lat: 24.8138,
-        lng: 67.0496,
-        address: 'Clifton Block 4 Sea View Rd',
-        heading: 210,
-        speed: 46,
-        batteryLevel: 42,
-        accuracy: 3,
-        lastPing: new Date().toISOString(),
-        todayDistanceKm: 68.2,
-        maxSpeedToday: 74,
-        stoppedDurationMinutes: 0,
-        rating: 4.7,
-        city: 'Karachi',
-        isSimulated: true,
-        recentHistory: [
-          { lat: 24.8350, lng: 67.0250, speed: 50, timestamp: new Date(Date.now() - 18 * 60000).toISOString(), heading: 195, address: 'Boat Basin' },
-          { lat: 24.8138, lng: 67.0496, speed: 46, timestamp: new Date().toISOString(), heading: 210, address: 'Clifton Sea View' },
-        ],
-      },
-    ];
+    snap.forEach((docSnap) => {
+      const data = docSnap.data();
+      const id = docSnap.id;
+      // Identify demo / simulated dummy records
+      if (
+        data.isSimulated === true ||
+        id === 'RDR-001' ||
+        id === 'RDR-002' ||
+        id === 'RDR-003' ||
+        id === 'RDR-004' ||
+        id === 'RDR-005' ||
+        id.startsWith('DEMO-')
+      ) {
+        demoDeletes.push(deleteDoc(doc(db, 'riders', id)));
+      }
+    });
 
-    for (const r of sampleRiders) {
-      await setDoc(doc(db, 'riders', r.id), r);
+    if (demoDeletes.length > 0) {
+      await Promise.all(demoDeletes);
     }
   } catch (err) {
-    console.warn('Initial fleet seed error:', err);
+    console.warn('Demo cleanup note:', err);
   }
 }
 

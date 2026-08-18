@@ -18,7 +18,7 @@ interface AdminMapViewProps {
   selectedRiderId: string | null;
   onSelectRider: (riderId: string) => void;
   activeFilter: string;
-  onResetFleet: () => void;
+  onResetFleet?: () => void;
   replayRiderId?: string | null;
   onCloseReplay?: () => void;
 }

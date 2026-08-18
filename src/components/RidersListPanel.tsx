@@ -13,7 +13,10 @@ import {
   Play, 
   Share2, 
   UserPlus,
-  AlertTriangle
+  AlertTriangle,
+  Trash2,
+  Sparkles,
+  RefreshCw
 } from 'lucide-react';
 import { formatTimeAgo, formatBattery } from '../utils/geo';
 
@@ -24,6 +27,9 @@ interface RidersListPanelProps {
   onOpenAddRiderModal: () => void;
   onStartRouteReplay: (riderId: string) => void;
   onOpenDirectRiderLink: (riderId: string) => void;
+  onDeleteRider?: (riderId: string) => void;
+  onClearAllRiders?: () => void;
+  onLoadDemoFleet?: () => void;
 }
 
 export const RidersListPanel: React.FC<RidersListPanelProps> = ({
@@ -33,9 +39,13 @@ export const RidersListPanel: React.FC<RidersListPanelProps> = ({
   onOpenAddRiderModal,
   onStartRouteReplay,
   onOpenDirectRiderLink,
+  onDeleteRider,
+  onClearAllRiders,
+  onLoadDemoFleet,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'moving' | 'idle' | 'offline'>('all');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const filteredRiders = riders.filter((rider) => {
     const matchesSearch =
@@ -72,6 +82,16 @@ export const RidersListPanel: React.FC<RidersListPanelProps> = ({
   const movingCount = riders.filter((r) => r.speed > 2 || r.status === 'moving').length;
   const idleCount = riders.filter((r) => (r.speed <= 2 && r.status !== 'offline') || r.status === 'idle').length;
 
+  const handleDeleteSingle = async (e: React.MouseEvent, rider: Rider) => {
+    e.stopPropagation();
+    if (!onDeleteRider) return;
+    if (confirm(`Remove rider "${rider.name}" from live tracking?`)) {
+      setDeletingId(rider.id);
+      await onDeleteRider(rider.id);
+      setDeletingId(null);
+    }
+  };
+
   return (
     <aside
       aria-label="Active Riders Fleet"
@@ -82,72 +102,117 @@ export const RidersListPanel: React.FC<RidersListPanelProps> = ({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-extrabold text-slate-900">Riders ({riders.length})</h2>
-            <span className="text-[11px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-mono font-bold">
-              {movingCount} Moving
-            </span>
+            {riders.length > 0 && (
+              <span className="text-[11px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-mono font-bold">
+                {movingCount} Moving
+              </span>
+            )}
           </div>
 
-          <button
-            onClick={onOpenAddRiderModal}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-xs"
-            title="Register rider and send GPS link"
-          >
-            <UserPlus className="w-3.5 h-3.5" />
-            <span>+ Add</span>
-          </button>
+          <div className="flex items-center gap-1.5">
+            {riders.length > 0 && onClearAllRiders && (
+              <button
+                onClick={() => {
+                  if (confirm('Clear all demo riders and start 100% clean?')) {
+                    onClearAllRiders();
+                  }
+                }}
+                className="px-2 py-1 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-[11px] font-bold transition"
+                title="Delete all data & start fresh"
+              >
+                Clear All
+              </button>
+            )}
+
+            <button
+              onClick={onOpenAddRiderModal}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-xs"
+              title="Register rider and send GPS link"
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+              <span>+ Add</span>
+            </button>
+          </div>
         </div>
 
         {/* Search Bar */}
-        <div className="relative">
-          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search rider, bike plate, area..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-white border border-slate-200 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-emerald-500 transition"
-          />
-        </div>
+        {riders.length > 0 && (
+          <>
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search rider, bike plate, area..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full bg-white border border-slate-200 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-emerald-500 transition"
+              />
+            </div>
 
-        {/* Filter Pills */}
-        <div className="flex items-center gap-1.5 text-xs">
-          <button
-            onClick={() => setStatusFilter('all')}
-            className={`px-2.5 py-1 rounded-lg font-bold transition text-[11px] ${
-              statusFilter === 'all'
-                ? 'bg-slate-800 text-white shadow-xs'
-                : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200'
-            }`}
-          >
-            All ({riders.length})
-          </button>
-          <button
-            onClick={() => setStatusFilter('moving')}
-            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-bold transition text-[11px] ${
-              statusFilter === 'moving'
-                ? 'bg-emerald-600 text-white shadow-xs'
-                : 'bg-white text-emerald-700 hover:text-emerald-800 border border-emerald-200'
-            }`}
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
-            <span>Moving ({movingCount})</span>
-          </button>
-          <button
-            onClick={() => setStatusFilter('idle')}
-            className={`px-2.5 py-1 rounded-lg font-bold transition text-[11px] ${
-              statusFilter === 'idle'
-                ? 'bg-amber-600 text-white shadow-xs'
-                : 'bg-white text-amber-700 hover:text-amber-800 border border-amber-200'
-            }`}
-          >
-            Stopped ({idleCount})
-          </button>
-        </div>
+            {/* Filter Pills */}
+            <div className="flex items-center gap-1.5 text-xs">
+              <button
+                onClick={() => setStatusFilter('all')}
+                className={`px-2.5 py-1 rounded-lg font-bold transition text-[11px] ${
+                  statusFilter === 'all'
+                    ? 'bg-slate-800 text-white shadow-xs'
+                    : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200'
+                }`}
+              >
+                All ({riders.length})
+              </button>
+              <button
+                onClick={() => setStatusFilter('moving')}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-bold transition text-[11px] ${
+                  statusFilter === 'moving'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'bg-white text-emerald-700 hover:text-emerald-800 border border-emerald-200'
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                <span>Moving ({movingCount})</span>
+              </button>
+              <button
+                onClick={() => setStatusFilter('idle')}
+                className={`px-2.5 py-1 rounded-lg font-bold transition text-[11px] ${
+                  statusFilter === 'idle'
+                    ? 'bg-amber-600 text-white shadow-xs'
+                    : 'bg-white text-amber-700 hover:text-amber-800 border border-amber-200'
+                }`}
+              >
+                Stopped ({idleCount})
+              </button>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Riders Cards List */}
       <div className="flex-1 overflow-y-auto p-2.5 space-y-2 bg-slate-50/30">
-        {filteredRiders.length === 0 ? (
+        {riders.length === 0 ? (
+          /* Clean Fleet State (0 Riders) */
+          <div className="p-6 text-center space-y-4 bg-white border border-slate-200 rounded-2xl my-3 shadow-xs">
+            <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto">
+              <Sparkles className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="font-extrabold text-sm text-slate-900">Database is Clean (0 Demo Data)</h3>
+              <p className="text-xs text-slate-500 mt-1 max-w-[250px] mx-auto">
+                Sara demo data delete ho chuka hai. Ab sirf real riders ka live GPS data yahan record aur view hoga:
+              </p>
+            </div>
+
+            <div className="space-y-2 pt-1">
+              <button
+                onClick={onOpenAddRiderModal}
+                className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition"
+              >
+                <UserPlus className="w-4 h-4" />
+                <span>+ Add Real Rider & Generate Link</span>
+              </button>
+            </div>
+          </div>
+        ) : filteredRiders.length === 0 ? (
           <div className="p-8 text-center text-slate-400 text-xs space-y-2">
             <p>No matching riders found.</p>
             <button
@@ -254,31 +319,46 @@ export const RidersListPanel: React.FC<RidersListPanelProps> = ({
                   </span>
                 </div>
 
-                {/* Quick Action Buttons */}
-                <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-end gap-1.5">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onStartRouteReplay(rider.id);
-                    }}
-                    className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-bold flex items-center gap-1 transition"
-                    title="Replay movement route"
-                  >
-                    <Play className="w-3 h-3 text-emerald-600" />
-                    <span>Replay Path</span>
-                  </button>
+                {/* Quick Action Buttons including DELETE */}
+                <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between gap-1.5">
+                  {/* Direct Delete button */}
+                  {onDeleteRider && (
+                    <button
+                      onClick={(e) => handleDeleteSingle(e, rider)}
+                      disabled={deletingId === rider.id}
+                      className="px-2 py-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg text-[10px] font-bold flex items-center gap-1 transition"
+                      title={`Delete ${rider.name}`}
+                    >
+                      <Trash2 className="w-3 h-3 text-rose-500" />
+                      <span>Delete</span>
+                    </button>
+                  )}
 
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onOpenDirectRiderLink(rider.id);
-                    }}
-                    className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-bold flex items-center gap-1 transition"
-                    title="Share GPS link"
-                  >
-                    <Share2 className="w-3 h-3 text-blue-600" />
-                    <span>Share</span>
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onStartRouteReplay(rider.id);
+                      }}
+                      className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-bold flex items-center gap-1 transition"
+                      title="Replay movement route"
+                    >
+                      <Play className="w-3 h-3 text-emerald-600" />
+                      <span>Replay</span>
+                    </button>
+
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenDirectRiderLink(rider.id);
+                      }}
+                      className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-bold flex items-center gap-1 transition"
+                      title="Share GPS link"
+                    >
+                      <Share2 className="w-3 h-3 text-blue-600" />
+                      <span>Share</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             );

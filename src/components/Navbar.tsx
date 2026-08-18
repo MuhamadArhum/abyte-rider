@@ -14,7 +14,6 @@ interface NavbarProps {
   currentView: 'admin' | 'rider';
   onViewChange: (view: 'admin' | 'rider') => void;
   onOpenAddRiderModal: () => void;
-  onResetFleet: () => void;
   soundEnabled: boolean;
   onToggleSound: () => void;
   activeEmergencyCount: number;
@@ -26,7 +25,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   currentView,
   onViewChange,
   onOpenAddRiderModal,
-  onResetFleet,
   soundEnabled,
   onToggleSound,
   activeEmergencyCount,
@@ -88,24 +86,14 @@ export const Navbar: React.FC<NavbarProps> = ({
 
       {/* Actions Toolbar */}
       <div className="flex items-center gap-2">
-        {/* Add Rider / GPS Link */}
+        {/* Add Real Rider / GPS Link */}
         <button
           id="btn-nav-add-rider"
           onClick={onOpenAddRiderModal}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-xs"
         >
           <UserPlus className="w-3.5 h-3.5" />
-          <span>+ Add Rider</span>
-        </button>
-
-        {/* Reset Demo Fleet */}
-        <button
-          id="btn-reset-fleet"
-          onClick={onResetFleet}
-          className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200 transition"
-          title="Reset sample fleet positions"
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
+          <span>+ Add Real Rider</span>
         </button>
 
         {/* Audio Alerts Toggle */}
