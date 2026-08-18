@@ -1,0 +1,81 @@
+{
+  "entities": {
+    "Rider": {
+      "title": "Rider",
+      "description": "Represents a fleet delivery rider being tracked in real-time.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 120 },
+        "phone": { "type": "string", "maxLength": 30 },
+        "avatar": { "type": "string", "maxLength": 500 },
+        "vehicleType": { "type": "string", "enum": ["bike", "car", "van", "scooter", "bicycle"] },
+        "vehiclePlate": { "type": "string", "maxLength": 50 },
+        "status": { "type": "string", "enum": ["online", "moving", "idle", "offline", "emergency"] },
+        "lat": { "type": "number" },
+        "lng": { "type": "number" },
+        "address": { "type": "string", "maxLength": 300 },
+        "heading": { "type": "number" },
+        "speed": { "type": "number" },
+        "batteryLevel": { "type": "number" },
+        "accuracy": { "type": "number" },
+        "lastPing": { "type": "string" },
+        "todayDistanceKm": { "type": "number" },
+        "maxSpeedToday": { "type": "number" },
+        "city": { "type": "string", "maxLength": 100 },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "name", "phone", "vehicleType", "vehiclePlate", "status", "lat", "lng"]
+    },
+    "GpsLog": {
+      "title": "GpsLog",
+      "description": "Individual 24/7 breadcrumb GPS location ping stored permanently for movement history replay.",
+      "type": "object",
+      "properties": {
+        "riderId": { "type": "string", "maxLength": 128 },
+        "lat": { "type": "number" },
+        "lng": { "type": "number" },
+        "speed": { "type": "number" },
+        "heading": { "type": "number" },
+        "accuracy": { "type": "number" },
+        "batteryLevel": { "type": "number" },
+        "timestamp": { "type": "string" },
+        "date": { "type": "string", "maxLength": 20 },
+        "address": { "type": "string", "maxLength": 300 }
+      },
+      "required": ["riderId", "lat", "lng", "speed", "timestamp", "date"]
+    },
+    "FleetAlert": {
+      "title": "FleetAlert",
+      "description": "Fleet emergency SOS or speeding alert notifications.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "riderId": { "type": "string", "maxLength": 128 },
+        "riderName": { "type": "string", "maxLength": 120 },
+        "type": { "type": "string", "enum": ["sos", "speeding", "idle", "low_battery", "geofence_breach", "device_offline"] },
+        "message": { "type": "string", "maxLength": 500 },
+        "timestamp": { "type": "string" },
+        "severity": { "type": "string", "enum": ["critical", "warning", "info"] },
+        "resolved": { "type": "boolean" },
+        "lat": { "type": "number" },
+        "lng": { "type": "number" }
+      },
+      "required": ["id", "riderId", "riderName", "type", "message", "timestamp", "resolved"]
+    }
+  },
+  "firestore": {
+    "/riders/{riderId}": {
+      "schema": "Rider",
+      "description": "Collection of all fleet delivery riders and their live telemetry state."
+    },
+    "/riders/{riderId}/gps_logs/{logId}": {
+      "schema": "GpsLog",
+      "description": "Sub-collection of chronological 24/7 breadcrumb GPS pings for a specific rider."
+    },
+    "/alerts/{alertId}": {
+      "schema": "FleetAlert",
+      "description": "Collection of fleet safety alerts and emergency distress signals."
+    }
+  }
+}

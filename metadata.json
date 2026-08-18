@@ -1,0 +1,6 @@
+{
+  "name": "RiderTrack 24/7 Fleet Dispatcher",
+  "description": "Real-time 24/7 live rider location tracking system, fleet monitoring admin console, and driver companion app.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
